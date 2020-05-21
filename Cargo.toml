@@ -1,0 +1,35 @@
+[package]
+name = "ckb-light-node-demo"
+version = "0.1.0"
+authors = ["quake <quake.wang@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rocksdb = "0.13"
+crossbeam-channel = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.5"
+ctrlc = { version = "3.1", features = ["termination"] }
+rand = "0.6"
+clap = "2.33"
+
+jsonrpc-core = "14.0"
+jsonrpc-derive = "14.0"
+jsonrpc-http-server = "14.0"
+jsonrpc-server-utils = "14.0"
+
+ckb-network = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
+ckb-util = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
+ckb-logger = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
+ckb-types = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
+ckb-build-info = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
+ckb-chain-spec = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
+ckb-resource = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
+ckb-jsonrpc-types = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
+
+bloom-filters = { git = "https://github.com/nervosnetwork/bloom-filters" }
+
+[dev-dependencies]
+tempfile = "3.0"
