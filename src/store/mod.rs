@@ -1,5 +1,6 @@
-mod rocksdb;
+use std::collections::HashMap;
 
+mod rocksdb;
 pub use self::rocksdb::RocksdbStore;
 
 #[derive(Debug)]
@@ -33,6 +34,19 @@ pub trait Store {
         direction: IteratorDirection,
     ) -> Result<Box<dyn Iterator<Item = IteratorItem>>, Error>;
     fn batch(&self) -> Result<Self::Batch, Error>;
+
+    // returns key_prefix => (entries, totol size, total value size)
+    fn statistics(&self) -> Result<HashMap<u8, (usize, usize, usize)>, Error> {
+        let iter = self.iter(&[], IteratorDirection::Forward)?;
+        let mut statistics: HashMap<u8, (usize, usize, usize)> = HashMap::new();
+        for (key, value) in iter {
+            let s = statistics.entry(*key.first().unwrap()).or_default();
+            s.0 += 1;
+            s.1 += key.len();
+            s.2 += value.len();
+        }
+        Ok(statistics)
+    }
 }
 
 pub trait Batch {

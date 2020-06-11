@@ -1,14 +1,17 @@
+use crate::protocols::HeaderProvider;
 use crate::store::{Batch, Error, IteratorDirection, Store};
 use ckb_types::{
     core::{BlockNumber, HeaderView},
     packed,
     prelude::*,
+    utilities::compact_to_difficulty,
+    U256,
 };
 use std::convert::TryInto;
 use std::sync::Arc;
 
 pub enum Key {
-    BlockNumber(BlockNumber),
+    ActiveChain(BlockNumber),
     Header(packed::Byte32),
     OutPoint(packed::OutPoint),
     ConsumedOutPoint(packed::OutPoint),
@@ -18,7 +21,7 @@ pub enum Key {
 
 #[repr(u8)]
 pub enum KeyPrefix {
-    BlockNumber = 224,
+    ActiveChain = 224,
     Header = 192,
     OutPoint = 160,
     ConsumedOutPoint = 128,
@@ -32,8 +35,8 @@ pub enum IOType {
     Output,
 }
 pub enum Value {
-    BlockNumber(packed::Byte32),
-    Header(packed::Header),
+    ActiveChain(packed::Byte32),
+    Header(packed::Header, U256),
     OutPoint(packed::CellOutput, packed::Bytes),
     ConsumedOutPoint(packed::CellOutput, packed::Bytes),
     FilteredBlock(Vec<(packed::Byte32, IOIndex, IOType)>),
@@ -51,8 +54,8 @@ impl Into<Vec<u8>> for Key {
         let mut encoded = Vec::new();
 
         match self {
-            Key::BlockNumber(block_number) => {
-                encoded.push(KeyPrefix::BlockNumber as u8);
+            Key::ActiveChain(block_number) => {
+                encoded.push(KeyPrefix::ActiveChain as u8);
                 encoded.extend_from_slice(&block_number.to_be_bytes());
             }
             Key::Header(block_hash) => {
@@ -85,11 +88,12 @@ impl Into<Vec<u8>> for Value {
     fn into(self) -> Vec<u8> {
         let mut encoded = Vec::new();
         match self {
-            Value::BlockNumber(block_hash) => {
+            Value::ActiveChain(block_hash) => {
                 encoded.extend_from_slice(block_hash.as_slice());
             }
-            Value::Header(header) => {
+            Value::Header(header, total_difficulty) => {
                 encoded.extend_from_slice(header.as_slice());
+                encoded.extend_from_slice(total_difficulty.pack().as_slice());
             }
             Value::OutPoint(output, output_data) | Value::ConsumedOutPoint(output, output_data) => {
                 encoded.extend_from_slice(output.as_slice());
@@ -123,10 +127,10 @@ impl<S: Store> ChainStore<S> {
         let mut iter = self
             .store
             .iter(
-                &[KeyPrefix::BlockNumber as u8 + 1],
+                &[KeyPrefix::ActiveChain as u8 + 1],
                 IteratorDirection::Reverse,
             )?
-            .take_while(|(key, _value)| key.starts_with(&[KeyPrefix::BlockNumber as u8]));
+            .take_while(|(key, _value)| key.starts_with(&[KeyPrefix::ActiveChain as u8]));
 
         if let Some(tip_hash) = iter.next().map(|(_key, value)| {
             packed::Byte32Reader::from_slice_should_be_ok(&value[..]).to_entity()
@@ -137,16 +141,32 @@ impl<S: Store> ChainStore<S> {
         }
     }
 
-    fn get_header(&self, block_hash: packed::Byte32) -> Result<Option<HeaderView>, Error> {
+    pub fn get_header(&self, block_hash: packed::Byte32) -> Result<Option<HeaderView>, Error> {
         self.store
             .get(&Key::Header(block_hash.clone()).into_vec())
             .map(|value| {
                 value.map(|raw| {
                     packed::HeaderView::new_builder()
-                        .data(packed::HeaderReader::from_slice_should_be_ok(&raw[..]).to_entity())
+                        .data(
+                            packed::HeaderReader::from_slice_should_be_ok(
+                                &raw[..packed::Header::TOTAL_SIZE],
+                            )
+                            .to_entity(),
+                        )
                         .hash(block_hash)
                         .build()
                         .unpack()
+                })
+            })
+    }
+
+    fn get_total_difficulty(&self, block_hash: packed::Byte32) -> Result<Option<U256>, Error> {
+        self.store
+            .get(&Key::Header(block_hash).into_vec())
+            .map(|value| {
+                value.map(|raw| {
+                    U256::from_little_endian(&raw[packed::Header::TOTAL_SIZE..])
+                        .expect("stored total difficulty")
                 })
             })
     }
@@ -156,37 +176,67 @@ impl<S: Store> ChainStore<S> {
         block_number: BlockNumber,
     ) -> Result<Option<packed::Byte32>, Error> {
         self.store
-            .get(&Key::BlockNumber(block_number).into_vec())
+            .get(&Key::ActiveChain(block_number).into_vec())
             .map(|value| {
                 value.map(|raw| packed::Byte32Reader::from_slice_should_be_ok(&raw[..]).to_entity())
             })
     }
 
-    pub fn insert_header(&self, header: HeaderView) -> Result<(), Error> {
-        self.insert_headers(&[header])
+    pub fn init(&self, genesis: HeaderView) -> Result<(), Error> {
+        let mut batch = self.store.batch()?;
+        batch.put_kv(
+            Key::Header(genesis.hash()),
+            Value::Header(
+                genesis.data(),
+                compact_to_difficulty(genesis.compact_target()),
+            ),
+        )?;
+        batch.put_kv(Key::ActiveChain(0), Value::ActiveChain(genesis.hash()))?;
+        batch.commit()
     }
 
-    pub fn insert_headers(&self, headers: &[HeaderView]) -> Result<(), Error> {
+    pub fn insert_header(&self, header: HeaderView) -> Result<(), Error> {
         let mut batch = self.store.batch()?;
-        for header in headers {
-            batch.put_kv(Key::Header(header.hash()), Value::Header(header.data()))?;
-        }
-        let last_header = headers.last().expect("checked len");
-        let first_header = headers.first().expect("checked len");
+        let parent_total_difficulty = self
+            .get_total_difficulty(header.parent_hash())?
+            .expect("verified parent hash");
+        let total_difficulty =
+            parent_total_difficulty + compact_to_difficulty(header.compact_target());
+        batch.put_kv(
+            Key::Header(header.hash()),
+            Value::Header(header.data(), total_difficulty.clone()),
+        )?;
+        let tip = self.tip()?.expect("stored tip");
+        if header.parent_hash() == tip.hash() {
+            batch.put_kv(
+                Key::ActiveChain(header.number()),
+                Value::ActiveChain(header.hash()),
+            )?;
+        } else {
+            let tip_total_difficulty = self.get_total_difficulty(tip.hash())?.expect("stored tip");
+            if total_difficulty > tip_total_difficulty {
+                for number in header.number()..=tip.number() {
+                    batch.delete(Key::ActiveChain(number).into_vec())?;
+                }
 
-        let tip = self.tip()?;
-        if tip.is_none()
-            || (last_header.number() > tip.expect("tip stored").number()
-                && self.get_block_hash(first_header.number() - 1)?.map_or_else(
-                    || false,
-                    |block_hash| block_hash == first_header.parent_hash(),
-                ))
-        {
-            for header in headers {
-                batch.put_kv(
-                    Key::BlockNumber(header.number()),
-                    Value::BlockNumber(header.hash()),
-                )?;
+                let mut current_header = header.clone();
+                loop {
+                    batch.put_kv(
+                        Key::ActiveChain(current_header.number()),
+                        Value::ActiveChain(current_header.hash()),
+                    )?;
+                    if self
+                        .get_block_hash(current_header.number() - 1)?
+                        .expect("stored active chain")
+                        == current_header.parent_hash()
+                    {
+                        break;
+                    } else {
+                        current_header = self
+                            .get_header(current_header.parent_hash())?
+                            .expect("stored parent header");
+                    }
+                }
             }
         }
 
@@ -220,7 +270,7 @@ impl<S: Store> ChainStore<S> {
         Ok(locator)
     }
 
-    pub fn insert_filtered_block(
+    pub fn append_filtered_block(
         &self,
         filtered_block: packed::FilteredBlock,
     ) -> Result<(), Error> {
@@ -244,7 +294,7 @@ impl<S: Store> ChainStore<S> {
                                 Key::ConsumedOutPoint(packed::OutPoint::new(tx_hash, index as u32)),
                                 Value::ConsumedOutPoint(output, output_data),
                             )?;
-                            batch.delete(&Key::OutPoint(input.previous_output()).into_vec())?;
+                            batch.delete(Key::OutPoint(input.previous_output()).into_vec())?;
                         }
                     }
                 }
@@ -263,32 +313,13 @@ impl<S: Store> ChainStore<S> {
                 }
             }
         };
-        let last_header = filtered_block.header().into_view();
+        let header = filtered_block.header().into_view();
         batch.put_kv(
-            Key::FilteredBlock(last_header.number(), last_header.hash()),
+            Key::FilteredBlock(header.number(), header.hash()),
             Value::FilteredBlock(matched),
         )?;
-        batch.put_kv(
-            Key::Header(last_header.hash()),
-            Value::Header(last_header.data()),
-        )?;
-
-        let tip = self.tip()?;
-        if last_header.number() > tip.expect("tip stored").number()
-            && self.get_block_hash(last_header.number() - 1)?.map_or_else(
-                || false,
-                |block_hash| block_hash == last_header.parent_hash(),
-            )
-        {
-            batch.put_kv(
-                Key::BlockNumber(last_header.number()),
-                Value::BlockNumber(last_header.hash()),
-            )?;
-            for script in scripts {
-                batch.put_kv(Key::Script(script), Value::Script(last_header.number()))?;
-            }
-        }
-        batch.commit()
+        batch.commit()?;
+        self.insert_header(header)
     }
 
     pub fn insert_filtered_blocks(
@@ -334,7 +365,7 @@ impl<S: Store> ChainStore<S> {
                                     )),
                                     Value::ConsumedOutPoint(output, output_data),
                                 )?;
-                                batch.delete(&Key::OutPoint(input.previous_output()).into_vec())?;
+                                batch.delete(Key::OutPoint(input.previous_output()).into_vec())?;
                             }
                         }
                     }
@@ -448,11 +479,11 @@ impl<S: Store> ChainStore<S> {
 
         self.store
             .iter(
-                &Key::BlockNumber(start_number).into_vec(),
+                &Key::ActiveChain(start_number).into_vec(),
                 IteratorDirection::Forward,
             )
             .map(|iter| {
-                iter.take_while(|(key, _value)| key.starts_with(&[KeyPrefix::BlockNumber as u8]))
+                iter.take_while(|(key, _value)| key.starts_with(&[KeyPrefix::ActiveChain as u8]))
                     .take(limit)
                     .map(|(_key, value)| {
                         packed::Byte32::from_slice(&value).expect("stored block hash")
@@ -500,7 +531,7 @@ impl<S: Store> ChainStore<S> {
                         if let Some((output, output_data)) =
                             self.get_consumed_out_point(out_point.clone())?
                         {
-                            batch.delete(&Key::ConsumedOutPoint(out_point.clone()).into_vec())?;
+                            batch.delete(Key::ConsumedOutPoint(out_point.clone()).into_vec())?;
                             batch.put_kv(
                                 Key::OutPoint(out_point),
                                 Value::OutPoint(output, output_data),
@@ -508,11 +539,11 @@ impl<S: Store> ChainStore<S> {
                         }
                     }
                     IOType::Output => {
-                        batch.delete(&Key::OutPoint(out_point).into_vec())?;
+                        batch.delete(Key::OutPoint(out_point).into_vec())?;
                     }
                 }
             }
-            batch.delete(&Key::FilteredBlock(block_number, block_hash).into_vec())?;
+            batch.delete(Key::FilteredBlock(block_number, block_hash).into_vec())?;
         }
 
         batch.commit()
@@ -575,5 +606,15 @@ impl<S: Store> ChainStore<S> {
                     })
                     .collect::<Vec<_>>()
             })
+    }
+}
+
+pub struct HeaderProviderWrapper<'a, S> {
+    pub store: &'a ChainStore<S>,
+}
+
+impl<'a, S: Store> HeaderProvider for HeaderProviderWrapper<'a, S> {
+    fn get_header(&self, hash: packed::Byte32) -> Option<HeaderView> {
+        self.store.get_header(hash).expect("store should be OK")
     }
 }

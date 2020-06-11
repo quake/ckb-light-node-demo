@@ -2,6 +2,7 @@ use ckb_build_info::Version;
 use ckb_light_node_demo::protocols::{ChainStore, FilterProtocol, SyncProtocol};
 use ckb_light_node_demo::service::Service;
 use ckb_light_node_demo::store::{RocksdbStore, Store};
+use ckb_logger::info;
 use ckb_network::{
     BlockingFlag, CKBProtocol, NetworkService, NetworkState, MAX_FRAME_LENGTH_FILTER,
     MAX_FRAME_LENGTH_SYNC,
@@ -11,7 +12,6 @@ use ckb_util::{Condvar, Mutex};
 use clap::{App, Arg};
 use crossbeam_channel::unbounded;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -61,18 +61,17 @@ fn main() {
 }
 
 fn init(config: ckb_network::NetworkConfig, rpc_listen_address: String) {
-    let store = ChainStore {
-        store: Arc::new(RocksdbStore::new(config.path.to_str().unwrap())),
-    };
+    let rocksdb = Arc::new(RocksdbStore::new(config.path.to_str().unwrap()));
+    info!("store statistics: {:?}", rocksdb.statistics().unwrap());
+    let store = ChainStore { store: rocksdb };
 
+    let resource = ckb_resource::Resource::bundled(format!("specs/{}.toml", "mainnet"));
+    let spec = ckb_chain_spec::ChainSpec::load_from(&resource).expect("load spec by name");
     if store.tip().expect("store should be OK").is_none() {
-        let resource = ckb_resource::Resource::bundled(format!("specs/{}.toml", "mainnet"));
-        let spec = ckb_chain_spec::ChainSpec::load_from(&resource).expect("load spec by name");
         let genesis = spec.build_genesis().expect("build genesis");
-        store
-            .insert_header(genesis.header())
-            .expect("store should be OK");
+        store.init(genesis.header()).expect("store should be OK");
     }
+    let consensus = spec.build_consensus().expect("build consensus");
 
     let (sender, receiver) = unbounded();
 
@@ -94,18 +93,9 @@ fn init(config: ckb_network::NetworkConfig, rpc_listen_address: String) {
     blocking_recv_flag.disable_disconnected();
     blocking_recv_flag.disable_notify();
 
-    let sync_protocol = Box::new(SyncProtocol {
-        store: store.clone(),
-    });
+    let sync_protocol = Box::new(SyncProtocol::new(store.clone(), consensus.clone()));
 
-    let filter_protocol = Box::new(FilterProtocol {
-        store,
-        control_receiver: receiver,
-        peer_filter_hash_seed: None,
-        pending_get_filtered_blocks: HashSet::new(),
-    });
-
-    // sender.send(ControlMessage::AddFilter());
+    let filter_protocol = Box::new(FilterProtocol::new(store.clone(), consensus, receiver));
 
     let protocols = vec![
         CKBProtocol::new(

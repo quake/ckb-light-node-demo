@@ -1,6 +1,7 @@
-use super::ChainStore;
+use super::{ChainStore, HeaderProviderWrapper, HeaderVerifier};
 use crate::store::Store;
 use bloom_filters::{BloomFilter, ClassicBloomFilter, DefaultBuildHashKernels, DefaultBuildHasher};
+use ckb_chain_spec::consensus::Consensus;
 use ckb_logger::{debug, info};
 use ckb_network::{bytes::Bytes, CKBProtocolContext, CKBProtocolHandler, PeerIndex};
 use ckb_types::{packed, prelude::*};
@@ -20,10 +21,27 @@ const FILTER_NUM_HASHES: u8 = 10;
 pub type Filter = ClassicBloomFilter<DefaultBuildHashKernels<DefaultBuildHasher>>;
 
 pub struct FilterProtocol<S> {
-    pub store: ChainStore<S>,
-    pub control_receiver: Receiver<ControlMessage>,
-    pub peer_filter_hash_seed: Option<(PeerIndex, Option<u32>)>,
-    pub pending_get_filtered_blocks: HashSet<packed::Byte32>,
+    store: ChainStore<S>,
+    consensus: Consensus,
+    control_receiver: Receiver<ControlMessage>,
+    peer_filter_hash_seed: Option<(PeerIndex, Option<u32>)>,
+    pending_get_filtered_blocks: HashSet<packed::Byte32>,
+}
+
+impl<S> FilterProtocol<S> {
+    pub fn new(
+        store: ChainStore<S>,
+        consensus: Consensus,
+        control_receiver: Receiver<ControlMessage>,
+    ) -> Self {
+        Self {
+            store,
+            consensus,
+            control_receiver,
+            peer_filter_hash_seed: None,
+            pending_get_filtered_blocks: HashSet::new(),
+        }
+    }
 }
 
 pub enum ControlMessage {
@@ -188,17 +206,21 @@ impl<S: Store + Send + Sync> CKBProtocolHandler for FilterProtocol<S> {
                     .expect("store should be OK");
             }
             packed::FilterMessageUnionReader::FilteredBlock(reader) => {
+                let header_provider = HeaderProviderWrapper { store: &self.store };
+                let header_verifier = HeaderVerifier::new(&self.consensus, &header_provider);
                 let filtered_block = reader.to_entity();
                 let header = filtered_block.header().into_view();
-                info!(
-                    "received FilteredBlock from peer: {}, block number: {}, block hash: {}",
-                    peer,
-                    header.number(),
-                    header.hash()
-                );
-                self.store
-                    .insert_filtered_block(filtered_block)
-                    .expect("store should be OK");
+                if header_verifier.verify(&header).is_ok() {
+                    info!(
+                        "received FilteredBlock from peer: {}, block number: {}, block hash: {}",
+                        peer,
+                        header.number(),
+                        header.hash()
+                    );
+                    self.store
+                        .append_filtered_block(filtered_block)
+                        .expect("store should be OK");
+                }
             }
             _ => {
                 // ignore
