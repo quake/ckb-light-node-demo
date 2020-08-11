@@ -1,25 +1,22 @@
-use ckb_build_info::Version;
+use ckb_app_config::NetworkConfig;
 use ckb_light_node_demo::protocols::{ChainStore, FilterProtocol, SyncProtocol};
-use ckb_light_node_demo::service::Service;
+use ckb_light_node_demo::service::RpcService;
 use ckb_light_node_demo::store::{RocksdbStore, Store};
 use ckb_logger::info;
 use ckb_network::{
-    BlockingFlag, CKBProtocol, NetworkService, NetworkState, MAX_FRAME_LENGTH_FILTER,
-    MAX_FRAME_LENGTH_SYNC,
+    BlockingFlag, CKBProtocol, DefaultExitHandler, NetworkService, NetworkState, SupportProtocols, ExitHandler,
 };
 use ckb_types::{prelude::*, H256};
-use ckb_util::{Condvar, Mutex};
 use clap::{App, Arg};
 use crossbeam_channel::unbounded;
 use serde::{Deserialize, Serialize};
-use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Config {
-    pub logger: ckb_logger::Config,
-    pub network: ckb_network::NetworkConfig,
+    pub logger: ckb_logger_service::Config,
+    pub network: NetworkConfig,
 }
 
 fn main() {
@@ -47,8 +44,8 @@ fn main() {
             .expect("deserialize config file");
     path.pop();
     path.push("run.log");
-    config.logger.file = Some(path.clone());
-    let _logger_guard = ckb_logger::init(config.logger).unwrap();
+    config.logger.file = path.clone();
+    let _logger_guard = ckb_logger_service::init(config.logger).unwrap();
     path.pop();
     path.push("db");
     config.network.path = path;
@@ -60,7 +57,7 @@ fn main() {
     init(config.network, rpc_listen_address);
 }
 
-fn init(config: ckb_network::NetworkConfig, rpc_listen_address: String) {
+fn init(config: ckb_app_config::NetworkConfig, rpc_listen_address: String) {
     let rocksdb = Arc::new(RocksdbStore::new(config.path.to_str().unwrap()));
     info!("store statistics: {:?}", rocksdb.statistics().unwrap());
     let store = ChainStore { store: rocksdb };
@@ -75,7 +72,7 @@ fn init(config: ckb_network::NetworkConfig, rpc_listen_address: String) {
 
     let (sender, receiver) = unbounded();
 
-    let _server = Service::new(store.clone(), sender, &rpc_listen_address).start();
+    let _server = RpcService::new(store.clone(), sender, &rpc_listen_address).start();
 
     let genesis_hash = store
         .get_block_hash(0)
@@ -84,9 +81,11 @@ fn init(config: ckb_network::NetworkConfig, rpc_listen_address: String) {
 
     let network_state =
         Arc::new(NetworkState::from_config(config).expect("Init network state failed"));
-    let exit_condvar = Arc::new((Mutex::new(()), Condvar::new()));
-    let version = get_version();
-    let required_protocol_ids = vec![100usize.into(), 200usize.into()];
+    let exit_handler = DefaultExitHandler::default();
+    let required_protocol_ids = vec![
+        SupportProtocols::Sync.protocol_id(),
+        SupportProtocols::BloomFilter.protocol_id(),
+    ];
 
     let mut blocking_recv_flag = BlockingFlag::default();
     blocking_recv_flag.disable_connected();
@@ -94,27 +93,18 @@ fn init(config: ckb_network::NetworkConfig, rpc_listen_address: String) {
     blocking_recv_flag.disable_notify();
 
     let sync_protocol = Box::new(SyncProtocol::new(store.clone(), consensus.clone()));
-
-    let filter_protocol = Box::new(FilterProtocol::new(store.clone(), consensus, receiver));
+    let filter_protocol = Box::new(FilterProtocol::new(store, consensus, receiver));
 
     let protocols = vec![
-        CKBProtocol::new(
-            "syn".to_string(),
-            100usize.into(),
-            &["1".to_string()][..],
-            MAX_FRAME_LENGTH_SYNC,
+        CKBProtocol::new_with_support_protocol(
+            SupportProtocols::Sync,
             sync_protocol,
             Arc::clone(&network_state),
-            blocking_recv_flag,
         ),
-        CKBProtocol::new(
-            "fil".to_string(),
-            200usize.into(),
-            &["1".to_string()][..],
-            MAX_FRAME_LENGTH_FILTER,
+        CKBProtocol::new_with_support_protocol(
+            SupportProtocols::BloomFilter,
             filter_protocol,
             Arc::clone(&network_state),
-            blocking_recv_flag,
         ),
     ];
 
@@ -127,57 +117,15 @@ fn init(config: ckb_network::NetworkConfig, rpc_listen_address: String) {
             &format!("{:x}", Unpack::<H256>::unpack(&genesis_hash))[..8]
         ),
         "ckb-light-node-demo".to_string(),
-        Arc::<(Mutex<()>, Condvar)>::clone(&exit_condvar),
+        exit_handler.clone(),
     )
-    .start(version, Some("NetworkService"))
+    .start(Some("NetworkService"))
     .expect("Start network service failed");
 
-    wait_for_exit(exit_condvar);
-}
-
-fn get_version() -> Version {
-    let major = env!("CARGO_PKG_VERSION_MAJOR")
-        .parse::<u8>()
-        .expect("CARGO_PKG_VERSION_MAJOR parse success");
-    let minor = env!("CARGO_PKG_VERSION_MINOR")
-        .parse::<u8>()
-        .expect("CARGO_PKG_VERSION_MINOR parse success");
-    let patch = env!("CARGO_PKG_VERSION_PATCH")
-        .parse::<u16>()
-        .expect("CARGO_PKG_VERSION_PATCH parse success");
-    let dash_pre = {
-        let pre = env!("CARGO_PKG_VERSION_PRE");
-        if pre == "" {
-            pre.to_string()
-        } else {
-            "-".to_string() + pre
-        }
-    };
-
-    let commit_describe = option_env!("COMMIT_DESCRIBE").map(ToString::to_string);
-    #[cfg(docker)]
-    let commit_describe = commit_describe.map(|s| s.replace("-dirty", ""));
-    let commit_date = option_env!("COMMIT_DATE").map(ToString::to_string);
-    let code_name = None;
-    Version {
-        major,
-        minor,
-        patch,
-        dash_pre,
-        code_name,
-        commit_describe,
-        commit_date,
-    }
-}
-
-fn wait_for_exit(exit: Arc<(Mutex<()>, Condvar)>) {
-    // Handle possible exits
-    let e = Arc::<(Mutex<()>, Condvar)>::clone(&exit);
-    let _ = ctrlc::set_handler(move || {
-        e.1.notify_all();
-    });
-
-    // Wait for signal
-    let mut l = exit.0.lock();
-    exit.1.wait(&mut l);
+    let exit_handler_clone = exit_handler.clone();
+    ctrlc::set_handler(move || {
+        exit_handler_clone.notify_exit();
+    })
+    .expect("Error setting Ctrl-C handler");
+    exit_handler.wait_for_exit();
 }

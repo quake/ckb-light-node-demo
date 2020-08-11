@@ -147,8 +147,8 @@ impl<S: Store + Send + Sync> CKBProtocolHandler for SyncProtocol<S> {
                     .peers
                     .iter()
                     .filter_map(|(peer, last_send_at)| {
-                        if now.duration_since(last_send_at.clone()) > duration {
-                            Some(peer.clone())
+                        if now.duration_since(*last_send_at) > duration {
+                            Some(*peer)
                         } else {
                             None
                         }

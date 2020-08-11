@@ -1,6 +1,7 @@
 use crate::protocols::{ChainStore, ControlMessage};
 use crate::store::Store;
-use ckb_jsonrpc_types::{CellOutput, JsonBytes, OutPoint, Script};
+use ckb_jsonrpc_types::{CellOutput, JsonBytes, OutPoint, Script, Transaction};
+use ckb_types::H256;
 use crossbeam_channel::Sender;
 use jsonrpc_core::{Error, ErrorCode, IoHandler, Result};
 use jsonrpc_derive::rpc;
@@ -10,13 +11,13 @@ use jsonrpc_server_utils::hosts::DomainsValidation;
 use serde::Serialize;
 use std::net::ToSocketAddrs;
 
-pub struct Service<S> {
+pub struct RpcService<S> {
     chain_store: ChainStore<S>,
     sender: Sender<ControlMessage>,
     listen_address: String,
 }
 
-impl<S: Store + Send + Sync + 'static> Service<S> {
+impl<S: Store + Send + Sync + 'static> RpcService<S> {
     pub fn new(
         chain_store: ChainStore<S>,
         sender: Sender<ControlMessage>,
@@ -31,7 +32,7 @@ impl<S: Store + Send + Sync + 'static> Service<S> {
 
     pub fn start(self) -> Server {
         let mut io_handler = IoHandler::new();
-        let Service {
+        let RpcService {
             chain_store,
             sender,
             listen_address,
@@ -74,6 +75,9 @@ pub trait Rpc {
 
     #[rpc(name = "get_cells")]
     fn get_cells(&self, script: Script) -> Result<Vec<Cell>>;
+
+    #[rpc(name = "send_transaction")]
+    fn send_transaction(&self, transaction: Transaction) -> Result<H256>;
 
     #[rpc(name = "start")]
     fn start(&self) -> Result<()>;
@@ -120,6 +124,10 @@ impl<S: Store + Send + Sync + 'static> Rpc for RpcImpl<S> {
                     })
                     .collect()
             })
+    }
+
+    fn send_transaction(&self, transaction: Transaction) -> Result<H256> {
+        Ok(H256::default())
     }
 
     fn start(&self) -> Result<()> {

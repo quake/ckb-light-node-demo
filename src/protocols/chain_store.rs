@@ -219,7 +219,7 @@ impl<S: Store> ChainStore<S> {
                     batch.delete(Key::ActiveChain(number).into_vec())?;
                 }
 
-                let mut current_header = header.clone();
+                let mut current_header = header;
                 loop {
                     batch.put_kv(
                         Key::ActiveChain(current_header.number()),

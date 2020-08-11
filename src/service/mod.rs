@@ -1,3 +1,3 @@
-mod service;
+mod rpc;
 
-pub use self::service::Service;
+pub use self::rpc::RpcService;

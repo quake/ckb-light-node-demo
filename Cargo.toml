@@ -20,11 +20,11 @@ jsonrpc-derive = "14.0"
 jsonrpc-http-server = "14.0"
 jsonrpc-server-utils = "14.0"
 
+ckb-app-config = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
+ckb-logger-service = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
 ckb-network = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
-ckb-util = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
 ckb-logger = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
 ckb-types = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
-ckb-build-info = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
 ckb-chain-spec = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
 ckb-resource = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
 ckb-jsonrpc-types = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
