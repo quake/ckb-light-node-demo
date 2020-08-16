@@ -454,12 +454,12 @@ impl<S: Store> ChainStore<S> {
             .unwrap_or(0);
         // check fork and find unfiltered block start number
         {
+            let mut start_key = Vec::new();
+            start_key.push(KeyPrefix::FilteredBlock as u8);
+            start_key.extend_from_slice(&(start_number + 1).to_be_bytes());
             let iter = self
                 .store
-                .iter(
-                    &[KeyPrefix::FilteredBlock as u8 + 1],
-                    IteratorDirection::Reverse,
-                )?
+                .iter(&start_key, IteratorDirection::Reverse)?
                 .take_while(|(key, _value)| key.starts_with(&[KeyPrefix::FilteredBlock as u8]));
 
             for (key, _value) in iter {

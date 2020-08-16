@@ -50,32 +50,6 @@ pub enum ControlMessage {
     Stop,
 }
 
-impl<S: Store + Send + Sync> FilterProtocol<S> {
-    fn send_get_filtered_blocks(
-        &mut self,
-        nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer: PeerIndex,
-    ) {
-        if self.pending_get_filtered_blocks.is_empty() {
-            let block_hashes = self
-                .store
-                .get_unfiltered_block_hashes(MAX_GET_FILTERED_BLOCKS_LEN)
-                .expect("store should be OK");
-            let message = packed::FilterMessage::new_builder()
-                .set(
-                    packed::GetFilteredBlocks::new_builder()
-                        .block_hashes(block_hashes.clone().pack())
-                        .build(),
-                )
-                .build();
-            if let Err(err) = nc.send_message_to(peer, message.as_bytes()) {
-                debug!("FilterProtocol send GetFilteredBlocks error: {:?}", err);
-            }
-            self.pending_get_filtered_blocks = block_hashes.into_iter().collect();
-        }
-    }
-}
-
 impl<S: Store + Send + Sync> CKBProtocolHandler for FilterProtocol<S> {
     fn init(&mut self, nc: Arc<dyn CKBProtocolContext + Sync>) {
         nc.set_notify(Duration::from_millis(10), SEND_GET_FILTERED_BLOCKS_TOKEN)
@@ -88,7 +62,25 @@ impl<S: Store + Send + Sync> CKBProtocolHandler for FilterProtocol<S> {
         match token {
             SEND_GET_FILTERED_BLOCKS_TOKEN => {
                 if let Some((peer, Some(_filter_hash_seed))) = self.peer_filter_hash_seed {
-                    self.send_get_filtered_blocks(Arc::clone(&nc), peer);
+                    if self.pending_get_filtered_blocks.is_empty() {
+                        let block_hashes = self
+                            .store
+                            .get_unfiltered_block_hashes(MAX_GET_FILTERED_BLOCKS_LEN)
+                            .expect("store should be OK");
+                        if !block_hashes.is_empty() {
+                            let message = packed::FilterMessage::new_builder()
+                                .set(
+                                    packed::GetFilteredBlocks::new_builder()
+                                        .block_hashes(block_hashes.clone().pack())
+                                        .build(),
+                                )
+                                .build();
+                            if let Err(err) = nc.send_message_to(peer, message.as_bytes()) {
+                                debug!("FilterProtocol send GetFilteredBlocks error: {:?}", err);
+                            }
+                            self.pending_get_filtered_blocks = block_hashes.into_iter().collect();
+                        }
+                    }
                 }
             }
             CONTROL_RECEIVER_TOKEN => {

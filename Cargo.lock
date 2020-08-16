@@ -100,6 +100,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bech32"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58946044516aa9dc922182e0d6e9d124a31aafe6b421614654eb27cf90cec09c"
+
+[[package]]
 name = "bindgen"
 version = "0.53.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -412,9 +418,11 @@ dependencies = [
 name = "ckb-light-node-demo"
 version = "0.1.0"
 dependencies = [
+ "bech32",
  "bloom-filters",
  "ckb-app-config",
  "ckb-chain-spec",
+ "ckb-crypto",
  "ckb-jsonrpc-types",
  "ckb-logger",
  "ckb-logger-service",

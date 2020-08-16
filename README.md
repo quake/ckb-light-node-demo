@@ -4,7 +4,7 @@
 cargo build --release
 mkdir /tmp/ckb-light-node-demo
 cp config.toml /tmp/ckb-light-node-demo
-./target/release/ckb-light-node-demo -d /tmp/ckb-light-node-demo
+CKB_LOG=info ./target/release/ckb-light-node-demo -d /tmp/ckb-light-node-demo -c mainnet
 ```
 
 ## RPC
