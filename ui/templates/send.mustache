@@ -1,0 +1,38 @@
+<div class="terminal-nav">
+    <div class="terminal-logo">
+        <div class="logo terminal-prompt"><a href="/" class="no-style">Light Node Demo UI</a></div>
+    </div>
+    <nav class="terminal-menu">
+        <ul>
+            <li><a class="menu-item active" href="/send.html">Send</a></li>
+            <li><a class="menu-item" href="/transactions.html">Transactions</a></li>
+        </ul>
+    </nav>
+</div>
+
+<form action="#" onsubmit="return do_transfer()">
+    <fieldset>
+        <legend>Send</legend>
+        <div class="form-group">
+            <label for="from_address">Select account:</label>
+            <select id="from_address" name="from_address">
+                {{#data}}
+                <option>{{address}} {{balance}} CKB</option>
+                {{/data}}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="to_address">To address:</label>
+            <input id="to_address" name="to_address" type="text" required="">
+        </div>
+
+        <div class="form-group">
+            <label for="capacity">Capacity:</label>
+            <input id="capacity" name="capacity" type="text" required="">
+        </div>
+
+        <div class="form-group">
+            <button class="btn btn-default" type="submit" role="button" name="submit" id="submit">Submit</button>
+        </div>
+    </fieldset>
+</form>

@@ -46,6 +46,7 @@ impl<S> FilterProtocol<S> {
 
 pub enum ControlMessage {
     AddFilter(packed::Script),
+    SendTransaction(packed::Transaction),
     Start,
     Stop,
 }
@@ -105,6 +106,20 @@ impl<S: Store + Send + Sync> CKBProtocolHandler for FilterProtocol<S> {
 
                                 if let Err(err) = nc.send_message_to(peer, message.as_bytes()) {
                                     debug!("FilterProtocol send AddFilter error: {:?}", err);
+                                }
+                            }
+                        }
+                        ControlMessage::SendTransaction(transaction) => {
+                            if let Some((peer, _)) = self.peer_filter_hash_seed {
+                                let message = packed::FilterMessage::new_builder()
+                                    .set(
+                                        packed::SendTransaction::new_builder()
+                                            .transaction(transaction)
+                                            .build(),
+                                    )
+                                    .build();
+                                if let Err(err) = nc.send_message_to(peer, message.as_bytes()) {
+                                    debug!("FilterProtocol send SendTransaction error: {:?}", err);
                                 }
                             }
                         }

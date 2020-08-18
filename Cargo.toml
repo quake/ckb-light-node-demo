@@ -25,11 +25,13 @@ ckb-app-config = { git = "https://github.com/nervosnetwork/ckb", branch = "quake
 ckb-logger-service = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
 ckb-network = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
 ckb-logger = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
+ckb-logger-config = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
 ckb-types = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
 ckb-chain-spec = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
 ckb-resource = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
 ckb-jsonrpc-types = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
 ckb-crypto = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
+ckb-hash = { git = "https://github.com/nervosnetwork/ckb", branch = "quake/bloom-filter" }
 
 bloom-filters = { git = "https://github.com/nervosnetwork/bloom-filters" }
 

@@ -4,13 +4,13 @@
     </div>
     <nav class="terminal-menu">
         <ul>
-            <li><a class="menu-item" href="#">Send</a></li>
-            <li><a class="menu-item" href="#">Transactions</a></li>
+            <li><a class="menu-item" href="/send.html">Send</a></li>
+            <li><a class="menu-item" href="/transactions.html">Transactions</a></li>
         </ul>
     </nav>
 </div>
 
-<table>
+<table style="text-align: right">
     <thead>
         <tr>
             <th>Address</th>
@@ -19,18 +19,18 @@
         </tr>
     </thead>
     <tbody>
-        {{#result}}
+        {{#data}}
         <tr>
             <td>{{address}}</td>
             <td>{{balance}} CKB</td>
             <td>{{indexed_block_number}}</td>
         </tr>
-        {{/result}}
+        {{/data}}
     </tbody>
     <tfoot>
         <tr>
-            <td><a href="#" onclick="generate_address()">Generate new address</a></td>
-            <td>Import</td>
+            <td><a href="#" onclick="do_generate_account()">Generate new account</a></td>
+            <td colspan="2">Import</td>
         </tr>
     </tfoot>
 </table>

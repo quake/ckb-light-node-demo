@@ -1,29 +1,75 @@
-var rpc_uri = "http://localhost:8121";
-
 function render_index() {
     fetch('templates/index.mustache')
-    .then((response) => response.text())
-    .then((template) => {
-        fetch(rpc_uri, {
-            method: 'POST',
-            headers: new Headers({
-                'Content-Type': 'application/json'
-            }),
-            body: '{"id": 2, "jsonrpc": "2.0", "method": "accounts", "params": []}'
-        }).then((rpc_res) => rpc_res.json())
-        .then((json) => {
-            var rendered = Mustache.render(template, json);
+    .then(response => response.text())
+    .then(template => {
+        request('accounts')
+        .then(json => {
+            const data = {
+                'data': json.result.map(a => ({
+                    address: a.address,
+                    balance: (parseInt(a.balance) / 100000000).toFixed(8),
+                    indexed_block_number: parseInt(a.indexed_block_number)
+                 }))
+            };
+            const rendered = Mustache.render(template, data);
             document.getElementById('main').innerHTML = rendered;
         });
     });
 }
 
-function generate_address() {
-    fetch(rpc_uri, {
+function render_send() {
+    fetch('templates/send.mustache')
+    .then(response => response.text())
+    .then(template => {
+        request('accounts')
+        .then(json => {
+            const data = {
+                'data': json.result.map(a => ({
+                    address: a.address,
+                    balance: (parseInt(a.balance) / 100000000).toFixed(8),
+                 }))
+            };
+            const rendered = Mustache.render(template, data);
+            document.getElementById('main').innerHTML = rendered;
+        });
+    });
+}
+
+function do_transfer() {
+    request('transfer',
+        document.getElementById('from_address').selectedIndex,
+        document.getElementById('to_address').value,
+        '0x' + (document.getElementById('capacity').value * 100000000).toString(16))
+    .then(json => {
+
+    })
+    return false;
+}
+
+function do_generate_account() {
+    request('generate_account')
+    .then(json => {
+        window.location.href = "/";
+    })
+}
+
+function request(method, ...params) {
+    const rpc_uri = "http://localhost:8121";
+    const req = {
         method: 'POST',
-        headers: new Headers({
-            'Content-Type': 'application/json'
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: guid(),
+            method,
+            params: Array.isArray(params) ? params : [params],
         }),
-        body: '{"id": 2, "jsonrpc": "2.0", "method": "generate_account", "params": []}'
-    }).then((rpc_res) => window.location.href = "/")
+    };
+
+    return fetch(rpc_uri, req).then(res => res.json());
+}
+
+function guid() {
+    return Math.random().toString(36).substring(2, 15) +
+        Math.random().toString(36).substring(2, 15);
 }

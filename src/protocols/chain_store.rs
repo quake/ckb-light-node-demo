@@ -580,7 +580,7 @@ impl<S: Store> ChainStore<S> {
 
     pub fn get_cells(
         &self,
-        script: packed::Script,
+        script: &packed::Script,
     ) -> Result<Vec<(packed::CellOutput, packed::Bytes, packed::OutPoint)>, Error> {
         self.store
             .iter(&[KeyPrefix::OutPoint as u8], IteratorDirection::Forward)
@@ -594,7 +594,7 @@ impl<S: Store> ChainStore<S> {
                         ) as usize;
                         let output = packed::CellOutput::from_slice(&value[..output_size])
                             .expect("stored OutPoint value: output");
-                        if output.lock() == script {
+                        if script.eq(&output.lock()) {
                             let out_point = packed::OutPoint::from_slice(&key[1..])
                                 .expect("stored OutPoint key");
                             let output_data = packed::Bytes::from_slice(&value[output_size..])

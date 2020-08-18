@@ -258,9 +258,9 @@ checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 
 [[package]]
 name = "chrono"
-version = "0.4.13"
+version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c74d84029116787153e02106bf53e66828452a4b325cc8652b788b5967c0a0b6"
+checksum = "942f72db697d8767c22d46a598e01f2d3b475501ea43d0db4f16d90259182d0b"
 dependencies = [
  "num-integer",
  "num-traits",
@@ -270,15 +270,16 @@ dependencies = [
 
 [[package]]
 name = "ckb-app-config"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "ckb-build-info",
  "ckb-chain-spec",
  "ckb-fee-estimator",
  "ckb-jsonrpc-types",
  "ckb-logger",
- "ckb-logger-service",
+ "ckb-logger-config",
+ "ckb-metrics-config",
  "ckb-pow",
  "ckb-resource",
  "ckb-types",
@@ -288,19 +289,20 @@ dependencies = [
  "sentry",
  "serde",
  "serde_plain",
- "tentacle",
+ "tentacle-multiaddr",
+ "tentacle-secio",
  "toml",
 ]
 
 [[package]]
 name = "ckb-build-info"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 
 [[package]]
 name = "ckb-chain-spec"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "ckb-crypto",
  "ckb-dao-utils",
@@ -318,8 +320,8 @@ dependencies = [
 
 [[package]]
 name = "ckb-crypto"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "ckb-fixed-hash",
  "failure",
@@ -331,8 +333,8 @@ dependencies = [
 
 [[package]]
 name = "ckb-dao-utils"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "byteorder",
  "ckb-error",
@@ -343,8 +345,8 @@ dependencies = [
 
 [[package]]
 name = "ckb-error"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "ckb-occupied-capacity",
  "enum-display-derive",
@@ -354,8 +356,8 @@ dependencies = [
 
 [[package]]
 name = "ckb-fee-estimator"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "ckb-logger",
  "ckb-types",
@@ -364,18 +366,17 @@ dependencies = [
 
 [[package]]
 name = "ckb-fixed-hash"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "ckb-fixed-hash-core",
- "ckb-fixed-hash-hack",
- "proc-macro-hack",
+ "ckb-fixed-hash-macros",
 ]
 
 [[package]]
 name = "ckb-fixed-hash-core"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "failure",
  "faster-hex 0.4.1",
@@ -383,12 +384,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "ckb-fixed-hash-hack"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+name = "ckb-fixed-hash-macros"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "ckb-fixed-hash-core",
- "proc-macro-hack",
  "proc-macro2 0.4.30",
  "quote 0.6.13",
  "syn 0.15.44",
@@ -396,16 +396,16 @@ dependencies = [
 
 [[package]]
 name = "ckb-hash"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "blake2b-rs",
 ]
 
 [[package]]
 name = "ckb-jsonrpc-types"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "ckb-types",
  "faster-hex 0.4.1",
@@ -423,8 +423,10 @@ dependencies = [
  "ckb-app-config",
  "ckb-chain-spec",
  "ckb-crypto",
+ "ckb-hash",
  "ckb-jsonrpc-types",
  "ckb-logger",
+ "ckb-logger-config",
  "ckb-logger-service",
  "ckb-network",
  "ckb-resource",
@@ -445,21 +447,30 @@ dependencies = [
 
 [[package]]
 name = "ckb-logger"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "log 0.4.11",
  "serde_json",
 ]
 
 [[package]]
+name = "ckb-logger-config"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "ckb-logger-service"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "ansi_term 0.12.1",
  "backtrace",
  "chrono",
+ "ckb-logger-config",
  "ckb-util",
  "crossbeam-channel",
  "env_logger 0.6.2",
@@ -467,13 +478,21 @@ dependencies = [
  "log 0.4.11",
  "regex",
  "sentry",
+]
+
+[[package]]
+name = "ckb-metrics-config"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
+dependencies = [
+ "log 0.4.11",
  "serde",
 ]
 
 [[package]]
 name = "ckb-network"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "bs58",
  "ckb-app-config",
@@ -504,57 +523,56 @@ dependencies = [
 
 [[package]]
 name = "ckb-occupied-capacity"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "ckb-occupied-capacity-core",
  "ckb-occupied-capacity-macros",
- "proc-macro-hack",
 ]
 
 [[package]]
 name = "ckb-occupied-capacity-core"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "ckb-occupied-capacity-macros"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "ckb-occupied-capacity-core",
- "proc-macro-hack",
  "quote 0.6.13",
  "syn 0.15.44",
 ]
 
 [[package]]
 name = "ckb-pow"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "byteorder",
  "ckb-hash",
  "ckb-types",
  "eaglesong",
+ "log 0.4.11",
  "serde",
 ]
 
 [[package]]
 name = "ckb-rational"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "numext-fixed-uint",
 ]
 
 [[package]]
 name = "ckb-resource"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "ckb-system-scripts",
  "ckb-types",
@@ -568,8 +586,8 @@ dependencies = [
 
 [[package]]
 name = "ckb-stop-handler"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "ckb-logger",
  "crossbeam-channel",
@@ -593,8 +611,8 @@ dependencies = [
 
 [[package]]
 name = "ckb-types"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "bit-vec",
  "bytes 0.5.6",
@@ -613,11 +631,12 @@ dependencies = [
 
 [[package]]
 name = "ckb-util"
-version = "0.35.0-pre"
-source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#acbd48dde9cc0f214e5ffd782b1a95fd5f309277"
+version = "0.36.0-pre"
+source = "git+https://github.com/nervosnetwork/ckb?branch=quake/bloom-filter#3cf8437cabf570362d7e9be68babb9ae4153bd34"
 dependencies = [
  "linked-hash-map",
  "parking_lot 0.7.1",
+ "regex",
 ]
 
 [[package]]
@@ -633,9 +652,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "2.33.2"
+version = "2.33.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10040cdf04294b565d9e0319955430099ec3813a64c952b86a41200ad714ae48"
+checksum = "37e58ac78573c40708d45522f0d80fa2f01cc4f9b4e2bf749807255454312002"
 dependencies = [
  "ansi_term 0.11.0",
  "atty",
@@ -820,9 +839,9 @@ checksum = "8d978bd5d343e8ab9b5c0fc8d93ff9c602fdc96616ffff9c05ac7a155419b824"
 
 [[package]]
 name = "either"
-version = "1.5.3"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb1f6b1ce1c140482ea30ddd3335fc0024ac7ee112895426e0a629a6c20adfe3"
+checksum = "cd56b59865bce947ac5958779cfa508f6c3b9497cc762b7e24a12d11ccde2c4f"
 
 [[package]]
 name = "encoding_rs"
@@ -1158,9 +1177,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34f595585f103464d8d2f6e9864682d74c1601fed5e07d62b1c9058dba8246fb"
+checksum = "e91b62f79061a0bc2e046024cb7ba44b08419ed238ecbd9adbd787434b9e8c25"
 dependencies = [
  "autocfg 1.0.0",
 ]
@@ -1348,9 +1367,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.5.0"
+version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b88cd59ee5f71fea89a62248fc8f387d44400cefe05ef548466d61ced9029a7"
+checksum = "86b45e59b16c76b11bf9738fd5d38879d3bd28ad292d7b313608becb17ae2df9"
 dependencies = [
  "autocfg 1.0.0",
  "hashbrown",
@@ -1463,9 +1482,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "lazycell"
-version = "1.2.1"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b294d6fa9ee409a054354afc4352b0b9ef7ca222c69b8812cbea9e7d2bf3783f"
+checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "libc"
@@ -1910,7 +1929,7 @@ dependencies = [
  "cloudabi",
  "libc",
  "redox_syscall",
- "smallvec 1.4.1",
+ "smallvec 1.4.2",
  "winapi 0.3.9",
 ]
 
@@ -2579,18 +2598,18 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.114"
+version = "1.0.115"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5317f7588f0a5078ee60ef675ef96735a1442132dc645eb1d12c018620ed8cd3"
+checksum = "e54c9a88f2da7238af84b5101443f0c0d0a3bbdc455e34a5c9497b1903ed55d5"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.114"
+version = "1.0.115"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a0be94b04690fbaed37cddffc5c134bf537c8e3329d53e982fe04c374978f8e"
+checksum = "609feed1d0a73cc36a0182a840a9b37b4a82f0b1150369f0536a9e3f2a31dc48"
 dependencies = [
  "proc-macro2 1.0.19",
  "quote 1.0.7",
@@ -2679,19 +2698,15 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.4.1"
+version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3757cb9d89161a2f24e1cf78efa0c1fcff485d18e3f55e0aa3480824ddaa0f3f"
+checksum = "fbee7696b84bbf3d89a1c2eccff0850e3047ed46bfcd2e92c29a2d074d57e252"
 
 [[package]]
 name = "snap"
-version = "0.2.5"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95d697d63d44ad8b78b8d235bf85b34022a78af292c8918527c5f0cffdde7f43"
-dependencies = [
- "byteorder",
- "lazy_static",
-]
+checksum = "da73c8f77aebc0e40c300b93f0a5f1bece7a248a36eee287d4e095f35c7b7d6e"
 
 [[package]]
 name = "spin"
@@ -2790,9 +2805,9 @@ dependencies = [
 
 [[package]]
 name = "tentacle"
-version = "0.3.0-alpha.5"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d372fcc0a53b9ca6705cc8e46b0a68850280c1b48f78c8c177eb8dfe50232413"
+checksum = "7d575b096a4c80e84d67378c7fdd8469df54b08b37596e5ffbe6b2347c74b7c6"
 dependencies = [
  "bytes 0.5.6",
  "futures 0.3.5",
@@ -2824,9 +2839,9 @@ dependencies = [
 
 [[package]]
 name = "tentacle-secio"
-version = "0.3.4"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58e14b0d86f0a9a2580cb4fb866ba15dcd1ddd6f055f342b806009dd401381a0"
+checksum = "3ea9c3062e6f891618a720befb4caef3e4ce650e21f23b4e718d80adcc483ccc"
 dependencies = [
  "bs58",
  "bytes 0.5.6",
@@ -3133,9 +3148,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-yamux"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24efa898a2c99b751966227ee5dedcb4a9dc549471eadde0df92bd16fc7f34d5"
+checksum = "927b87d25ead087be05f3aa42704a7e1e87b4e4a71ebbdf0c505489cbf52f106"
 dependencies = [
  "bytes 0.5.6",
  "futures 0.3.5",

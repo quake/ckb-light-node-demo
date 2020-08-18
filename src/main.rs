@@ -3,6 +3,7 @@ use ckb_light_node_demo::protocols::{ChainStore, FilterProtocol, SyncProtocol};
 use ckb_light_node_demo::service::RpcService;
 use ckb_light_node_demo::store::{RocksdbStore, Store};
 use ckb_logger::info;
+use ckb_logger_config::Config as LogConfig;
 use ckb_network::{
     BlockingFlag, CKBProtocol, DefaultExitHandler, ExitHandler, NetworkService, NetworkState,
     SupportProtocols,
@@ -15,7 +16,7 @@ use std::sync::Arc;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Config {
-    pub logger: ckb_logger_service::Config,
+    pub logger: LogConfig,
     pub network: NetworkConfig,
 }
 
@@ -99,7 +100,7 @@ fn init(
         sender,
         rpc_listen_address,
         private_keys_store_path,
-        chain,
+        &consensus,
     )
     .start();
 
