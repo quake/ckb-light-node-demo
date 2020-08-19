@@ -65,7 +65,7 @@ function do_transfer() {
         document.getElementById('to_address').value,
         '0x' + (document.getElementById('capacity').value * 100000000).toString(16))
     .then(json => {
-
+        alert("success, tx hash: " + json.result)
     })
     return false;
 }
@@ -90,7 +90,15 @@ function request(method, ...params) {
         }),
     };
 
-    return fetch(rpc_uri, req).then(res => res.json());
+    return fetch(rpc_uri, req)
+        .then(res => res.json())
+        .then(json => {
+            if (json.error) {
+                alert(json.error.message);
+            } else {
+                return json;
+            }
+        });
 }
 
 function guid() {

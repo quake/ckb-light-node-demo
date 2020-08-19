@@ -345,7 +345,11 @@ impl<S: Store + Send + Sync + 'static> Rpc for RpcImpl<S> {
         to_address: String,
         to_capacity: JsonCapacity,
     ) -> Result<H256> {
-        let to_script = address_to_script(&to_address).unwrap();
+        let to_script = address_to_script(&to_address).map_err(|err| Error {
+            code: ErrorCode::InternalError,
+            message: format!("parse script error: {}", err),
+            data: None,
+        })?;
 
         if let Some((from_script, _)) = self
             .chain_store
