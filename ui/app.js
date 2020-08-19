@@ -44,7 +44,19 @@ function render_transactions() {
             const data = {
                 'data': json.result
                 .sort((a, b) => {
-                    return (a.block_number > b.block_number) ? -1 : (a.block_number == b.block_number ? 0 : 1);
+                    if (a.block_number > b.block_number) {
+                        return -1;
+                    }
+                    if (a.block_number < b.block_number) {
+                        return 1;
+                    }
+                    if (a.address > b.address) {
+                        return -1;
+                    }
+                    if (a.address < b.address) {
+                        return 1;
+                    }
+                    return 0;
                 })
                 .map(a => ({
                     address: a.address,
