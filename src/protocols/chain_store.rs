@@ -41,8 +41,9 @@ pub enum Value {
     ConsumedOutPoint(
         packed::CellOutput,
         packed::Bytes,
-        packed::Byte32,
         BlockNumber,
+        packed::Byte32, // Consumed by which tx hash
+        BlockNumber,    // Consumed by which block number
     ),
     FilteredBlock(Vec<(packed::Byte32, IOIndex, IOType)>),
     Script(BlockNumber),
@@ -105,11 +106,18 @@ impl Into<Vec<u8>> for Value {
                 encoded.extend_from_slice(output_data.as_slice());
                 encoded.extend_from_slice(&block_number.to_be_bytes());
             }
-            Value::ConsumedOutPoint(output, output_data, tx_hash, block_number) => {
+            Value::ConsumedOutPoint(
+                output,
+                output_data,
+                block_number,
+                consumed_by_tx_hash,
+                consumed_by_block_number,
+            ) => {
                 encoded.extend_from_slice(output.as_slice());
                 encoded.extend_from_slice(output_data.as_slice());
-                encoded.extend_from_slice(tx_hash.as_slice());
                 encoded.extend_from_slice(&block_number.to_be_bytes());
+                encoded.extend_from_slice(consumed_by_tx_hash.as_slice());
+                encoded.extend_from_slice(&consumed_by_block_number.to_be_bytes());
             }
             Value::FilteredBlock(ios) => {
                 for (tx_hash, io_index, io_type) in ios {
@@ -296,7 +304,7 @@ impl<S: Store> ChainStore<S> {
         if let Some(filtered_txs) = filtered_block.transactions().to_opt() {
             for tx in filtered_txs.transactions() {
                 for (index, input) in tx.raw().inputs().into_iter().enumerate() {
-                    if let Some((output, output_data)) =
+                    if let Some((output, output_data, block_number)) =
                         self.get_out_point(input.previous_output())?
                     {
                         if scripts.iter().any(|script| script == &output.lock()) {
@@ -307,6 +315,7 @@ impl<S: Store> ChainStore<S> {
                                 Value::ConsumedOutPoint(
                                     output,
                                     output_data,
+                                    block_number,
                                     tx.calc_tx_hash(),
                                     filtered_block.header().raw().number().unpack(),
                                 ),
@@ -370,7 +379,7 @@ impl<S: Store> ChainStore<S> {
                 let mut matched = Vec::new();
                 for tx in matched_block.transactions() {
                     for (index, input) in tx.raw().inputs().into_iter().enumerate() {
-                        if let Some((output, output_data)) =
+                        if let Some((output, output_data, block_number)) =
                             self.get_out_point(input.previous_output())?
                         {
                             if scripts.iter().any(|script| script == &output.lock()) {
@@ -384,6 +393,7 @@ impl<S: Store> ChainStore<S> {
                                     Value::ConsumedOutPoint(
                                         output,
                                         output_data,
+                                        block_number,
                                         tx.calc_tx_hash(),
                                         header.number(),
                                     ),
@@ -427,7 +437,7 @@ impl<S: Store> ChainStore<S> {
     fn get_out_point(
         &self,
         out_point: packed::OutPoint,
-    ) -> Result<Option<(packed::CellOutput, packed::Bytes)>, Error> {
+    ) -> Result<Option<(packed::CellOutput, packed::Bytes, BlockNumber)>, Error> {
         self.store
             .get(&Key::OutPoint(out_point).into_vec())
             .map(|value| {
@@ -441,7 +451,12 @@ impl<S: Store> ChainStore<S> {
                         .expect("stored OutPoint value: output");
                     let output_data = packed::Bytes::from_slice(&raw[output_size..raw.len() - 8])
                         .expect("stored OutPoint value: output_data");
-                    (output, output_data)
+                    let block_number = BlockNumber::from_be_bytes(
+                        raw[raw.len() - 8..]
+                            .try_into()
+                            .expect("stored OutPoint value: block_number"),
+                    );
+                    (output, output_data, block_number)
                 })
             })
     }
@@ -449,7 +464,7 @@ impl<S: Store> ChainStore<S> {
     fn get_consumed_out_point(
         &self,
         out_point: packed::OutPoint,
-    ) -> Result<Option<(packed::CellOutput, packed::Bytes)>, Error> {
+    ) -> Result<Option<(packed::CellOutput, packed::Bytes, BlockNumber)>, Error> {
         self.store
             .get(&Key::ConsumedOutPoint(out_point).into_vec())
             .map(|value| {
@@ -461,9 +476,14 @@ impl<S: Store> ChainStore<S> {
                     ) as usize;
                     let output = packed::CellOutput::from_slice(&raw[..output_size])
                         .expect("stored ConsumedOutPoint output");
-                    let output_data = packed::Bytes::from_slice(&raw[output_size..raw.len() - 36])
+                    let output_data = packed::Bytes::from_slice(&raw[output_size..raw.len() - 48])
                         .expect("stored ConsumedOutPoint output_data");
-                    (output, output_data)
+                    let created_by_block_number = BlockNumber::from_be_bytes(
+                        raw[raw.len() - 48..raw.len() - 40]
+                            .try_into()
+                            .expect("stored ConsumedOutPoint value: created_by_block_number"),
+                    );
+                    (output, output_data, created_by_block_number)
                 })
             })
     }
@@ -552,13 +572,13 @@ impl<S: Store> ChainStore<S> {
                 let out_point = packed::OutPoint::new(tx_hash, io_index);
                 match io_type {
                     IOType::Input => {
-                        if let Some((output, output_data)) =
+                        if let Some((output, output_data, created_by_block_number)) =
                             self.get_consumed_out_point(out_point.clone())?
                         {
                             batch.delete(Key::ConsumedOutPoint(out_point.clone()).into_vec())?;
                             batch.put_kv(
                                 Key::OutPoint(out_point),
-                                Value::OutPoint(output, output_data, block_number),
+                                Value::OutPoint(output, output_data, created_by_block_number),
                             )?;
                         }
                     }
@@ -607,9 +627,9 @@ impl<S: Store> ChainStore<S> {
         script: &packed::Script,
     ) -> Result<
         Vec<(
+            packed::OutPoint,
             packed::CellOutput,
             packed::Bytes,
-            packed::OutPoint,
             BlockNumber,
         )>,
         Error,
@@ -637,7 +657,7 @@ impl<S: Store> ChainStore<S> {
                                     .try_into()
                                     .expect("stored OutPoint value: block_number"),
                             );
-                            Some((output, output_data, out_point, block_number))
+                            Some((out_point, output, output_data, block_number))
                         } else {
                             None
                         }
@@ -651,9 +671,10 @@ impl<S: Store> ChainStore<S> {
         script: &packed::Script,
     ) -> Result<
         Vec<(
+            packed::OutPoint,
             packed::CellOutput,
             packed::Bytes,
-            packed::OutPoint,
+            BlockNumber,
             packed::Byte32,
             BlockNumber,
         )>,
@@ -680,17 +701,22 @@ impl<S: Store> ChainStore<S> {
                         let out_point = packed::OutPoint::from_slice(&key[1..])
                             .expect("stored ConsumedOutPoint key");
                         let output_data =
-                            packed::Bytes::from_slice(&value[output_size..value.len() - 40])
+                            packed::Bytes::from_slice(&value[output_size..value.len() - 48])
                                 .expect("stored ConsumedOutPoint value: output_data");
-                        let tx_hash =
+                        let created_by_block_number = BlockNumber::from_be_bytes(
+                            value[value.len() - 48..value.len() - 40]
+                                .try_into()
+                                .expect("stored ConsumedOutPoint value: created_by_block_number"),
+                        );
+                        let consumed_by_tx_hash =
                             packed::Byte32::from_slice(&value[value.len() - 40..value.len() - 8])
                                 .expect("stored ConsumedOutPoint value: tx_hash");
-                        let block_number = BlockNumber::from_be_bytes(
+                        let consumed_by_block_number = BlockNumber::from_be_bytes(
                             value[value.len() - 8..]
                                 .try_into()
-                                .expect("stored ConsumedOutPoint value: block_number"),
+                                .expect("stored ConsumedOutPoint value: consumed_by_block_number"),
                         );
-                        Some((output, output_data, out_point, tx_hash, block_number))
+                        Some((out_point, output, output_data, created_by_block_number, consumed_by_tx_hash, consumed_by_block_number))
                     } else {
                         None
                     }

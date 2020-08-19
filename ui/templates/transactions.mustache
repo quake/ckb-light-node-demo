@@ -1,0 +1,32 @@
+<div class="terminal-nav">
+    <div class="terminal-logo">
+        <div class="logo terminal-prompt"><a href="/" class="no-style">Light Node Demo UI</a></div>
+    </div>
+    <nav class="terminal-menu">
+        <ul>
+            <li><a class="menu-item" href="/send.html">Send</a></li>
+            <li><a class="menu-item active" href="/transactions.html">Transactions</a></li>
+        </ul>
+    </nav>
+</div>
+
+<table style="text-align: right">
+    <thead>
+        <tr>
+            <th>Address</th>
+            <th>Balance Change</th>
+            <th>Transaction Hash</th>
+            <th>Block Number</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{#data}}
+        <tr>
+            <td>{{address}}</td>
+            <td>{{balance_change}} CKB</td>
+            <td>{{tx_hash}}</td>
+            <td>{{block_number}}</td>
+        </tr>
+        {{/data}}
+    </tbody>
+</table>

@@ -35,6 +35,30 @@ function render_send() {
     });
 }
 
+function render_transactions() {
+    fetch('templates/transactions.mustache')
+    .then(response => response.text())
+    .then(template => {
+        request('account_transactions')
+        .then(json => {
+            const data = {
+                'data': json.result
+                .sort((a, b) => {
+                    return (a.block_number > b.block_number) ? 1 : (a.block_number == b.block_number ? 0 : -1);
+                })
+                .map(a => ({
+                    address: a.address,
+                    tx_hash: a.tx_hash,
+                    balance_change: (a.balance_change / 100000000).toFixed(8),
+                    block_number: parseInt(a.block_number)
+                 }))
+            };
+            const rendered = Mustache.render(template, data);
+            document.getElementById('main').innerHTML = rendered;
+        });
+    });
+}
+
 function do_transfer() {
     request('transfer',
         document.getElementById('from_address').selectedIndex,

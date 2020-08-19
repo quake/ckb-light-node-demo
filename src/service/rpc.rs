@@ -22,6 +22,7 @@ use jsonrpc_server_utils::cors::AccessControlAllowOrigin;
 use jsonrpc_server_utils::hosts::DomainsValidation;
 use rand::{thread_rng, Rng};
 use serde::Serialize;
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::net::ToSocketAddrs;
@@ -120,9 +121,9 @@ impl<S: Store + Send + Sync + 'static> RpcService<S> {
 
 #[derive(Serialize)]
 pub struct Cell {
+    out_point: OutPoint,
     output: CellOutput,
     output_data: JsonBytes,
-    out_point: OutPoint,
 }
 
 #[derive(Serialize)]
@@ -134,9 +135,10 @@ pub struct Account {
 
 #[derive(Serialize)]
 pub struct AccountTransaction {
-    tx_hash: H256,
     address: String,
-    balance: JsonCapacity,
+    tx_hash: H256,
+    balance_change: i64,
+    block_number: BlockNumber,
 }
 
 const SECP256K1_BLAKE160_SIGHASH_ALL_TYPE_HASH: H256 =
@@ -166,8 +168,8 @@ pub trait Rpc {
     #[rpc(name = "accounts")]
     fn accounts(&self) -> Result<Vec<Account>>;
 
-    #[rpc(name = "transactions")]
-    fn transactions(&self) -> Result<Vec<AccountTransaction>>;
+    #[rpc(name = "account_transactions")]
+    fn account_transactions(&self) -> Result<Vec<AccountTransaction>>;
 
     #[rpc(name = "transfer")]
     fn transfer(
@@ -212,10 +214,10 @@ impl<S: Store + Send + Sync + 'static> Rpc for RpcImpl<S> {
             .map(|cells| {
                 cells
                     .into_iter()
-                    .map(|(output, output_data, out_point, _block_number)| Cell {
+                    .map(|(out_point, output, output_data, _created_by_block_number)| Cell {
+                        out_point: out_point.into(),
                         output: output.into(),
                         output_data: output_data.into(),
-                        out_point: out_point.into(),
                     })
                     .collect()
             })
@@ -272,7 +274,7 @@ impl<S: Store + Send + Sync + 'static> Rpc for RpcImpl<S> {
                 .get_cells(&script.into())
                 .unwrap()
                 .iter()
-                .map(|(output, _output_data, _out_point, _block_number)| {
+                .map(|(_out_point, output, _output_data, _created_by_block_number)| {
                     let capacity: Capacity = output.capacity().unpack();
                     capacity
                 })
@@ -289,8 +291,52 @@ impl<S: Store + Send + Sync + 'static> Rpc for RpcImpl<S> {
         Ok(result)
     }
 
-    fn transactions(&self) -> Result<Vec<AccountTransaction>> {
-        Ok(Vec::new())
+    fn account_transactions(&self) -> Result<Vec<AccountTransaction>> {
+        let mut account_changes: HashMap<_, i64> = HashMap::new();
+
+        for (script, _) in self.chain_store.get_scripts().unwrap() {
+            for (out_point, cell_output, _output_data, created_by_block_number, consumed_by_tx_hash, consumed_by_block_number) in
+                self.chain_store.get_consumed_cells(&script).unwrap()
+            {
+                let capacity: Capacity = cell_output.capacity().unpack();
+                account_changes
+                    .entry((script.clone(), out_point.tx_hash(), created_by_block_number))
+                    .and_modify(|balance_change| {
+                        *balance_change += capacity.as_u64() as i64;
+                    })
+                    .or_insert_with(|| capacity.as_u64() as i64);
+
+                account_changes
+                    .entry((script.clone(), consumed_by_tx_hash, consumed_by_block_number))
+                    .and_modify(|balance_change| {
+                        *balance_change -= capacity.as_u64() as i64;
+                    })
+                    .or_insert_with(|| -(capacity.as_u64() as i64));
+            }
+
+            for (out_point, cell_output, _output_data, created_by_block_number) in
+                self.chain_store.get_cells(&script).unwrap()
+            {
+                let capacity: Capacity = cell_output.capacity().unpack();
+                account_changes
+                    .entry((script.clone(), out_point.tx_hash(), created_by_block_number))
+                    .and_modify(|balance_change| {
+                        *balance_change += capacity.as_u64() as i64;
+                    })
+                    .or_insert_with(|| capacity.as_u64() as i64);
+            }
+        }
+
+        let result: Vec<_> = account_changes.into_iter().map(|((script, tx_hash, block_number), balance_change)| {
+            AccountTransaction {
+                address: script_to_address(&script, &self.consensus.id),
+                tx_hash: tx_hash.unpack(),
+                balance_change,
+                block_number: block_number.into(),
+            }
+        }).collect();
+
+        Ok(result)
     }
 
     fn transfer(
@@ -342,7 +388,7 @@ impl<S: Store + Send + Sync + 'static> Rpc for RpcImpl<S> {
 
             let mut inputs_capacity = Capacity::zero();
 
-            for (output, _output_data, out_point, _block_number) in
+            for (out_point, output, _output_data, _created_by_block_number) in
                 self.chain_store.get_cells(from_script).unwrap()
             {
                 inputs_capacity = inputs_capacity
