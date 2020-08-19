@@ -156,12 +156,6 @@ pub trait Rpc {
     #[rpc(name = "send_transaction")]
     fn send_transaction(&self, transaction: Transaction) -> Result<H256>;
 
-    #[rpc(name = "start")]
-    fn start(&self) -> Result<()>;
-
-    #[rpc(name = "stop")]
-    fn stop(&self) -> Result<()>;
-
     #[rpc(name = "generate_account")]
     fn generate_account(&self) -> Result<()>;
 
@@ -214,11 +208,13 @@ impl<S: Store + Send + Sync + 'static> Rpc for RpcImpl<S> {
             .map(|cells| {
                 cells
                     .into_iter()
-                    .map(|(out_point, output, output_data, _created_by_block_number)| Cell {
-                        out_point: out_point.into(),
-                        output: output.into(),
-                        output_data: output_data.into(),
-                    })
+                    .map(
+                        |(out_point, output, output_data, _created_by_block_number)| Cell {
+                            out_point: out_point.into(),
+                            output: output.into(),
+                            output_data: output_data.into(),
+                        },
+                    )
                     .collect()
             })
     }
@@ -228,14 +224,6 @@ impl<S: Store + Send + Sync + 'static> Rpc for RpcImpl<S> {
         let tx_hash = tx.calc_tx_hash();
         self.send_control_message(ControlMessage::SendTransaction(tx))
             .map(|_| tx_hash.unpack())
-    }
-
-    fn start(&self) -> Result<()> {
-        self.send_control_message(ControlMessage::Start)
-    }
-
-    fn stop(&self) -> Result<()> {
-        self.send_control_message(ControlMessage::Stop)
     }
 
     fn generate_account(&self) -> Result<()> {
@@ -274,10 +262,12 @@ impl<S: Store + Send + Sync + 'static> Rpc for RpcImpl<S> {
                 .get_cells(&script.into())
                 .unwrap()
                 .iter()
-                .map(|(_out_point, output, _output_data, _created_by_block_number)| {
-                    let capacity: Capacity = output.capacity().unpack();
-                    capacity
-                })
+                .map(
+                    |(_out_point, output, _output_data, _created_by_block_number)| {
+                        let capacity: Capacity = output.capacity().unpack();
+                        capacity
+                    },
+                )
                 .try_fold(Capacity::zero(), Capacity::safe_add)
                 .unwrap();
 
@@ -295,8 +285,14 @@ impl<S: Store + Send + Sync + 'static> Rpc for RpcImpl<S> {
         let mut account_changes: HashMap<_, i64> = HashMap::new();
 
         for (script, _) in self.chain_store.get_scripts().unwrap() {
-            for (out_point, cell_output, _output_data, created_by_block_number, consumed_by_tx_hash, consumed_by_block_number) in
-                self.chain_store.get_consumed_cells(&script).unwrap()
+            for (
+                out_point,
+                cell_output,
+                _output_data,
+                created_by_block_number,
+                consumed_by_tx_hash,
+                consumed_by_block_number,
+            ) in self.chain_store.get_consumed_cells(&script).unwrap()
             {
                 let capacity: Capacity = cell_output.capacity().unpack();
                 account_changes
@@ -307,7 +303,11 @@ impl<S: Store + Send + Sync + 'static> Rpc for RpcImpl<S> {
                     .or_insert_with(|| capacity.as_u64() as i64);
 
                 account_changes
-                    .entry((script.clone(), consumed_by_tx_hash, consumed_by_block_number))
+                    .entry((
+                        script.clone(),
+                        consumed_by_tx_hash,
+                        consumed_by_block_number,
+                    ))
                     .and_modify(|balance_change| {
                         *balance_change -= capacity.as_u64() as i64;
                     })
@@ -327,14 +327,17 @@ impl<S: Store + Send + Sync + 'static> Rpc for RpcImpl<S> {
             }
         }
 
-        let result: Vec<_> = account_changes.into_iter().map(|((script, tx_hash, block_number), balance_change)| {
-            AccountTransaction {
-                address: script_to_address(&script, &self.consensus.id),
-                tx_hash: tx_hash.unpack(),
-                balance_change,
-                block_number: block_number.into(),
-            }
-        }).collect();
+        let result: Vec<_> = account_changes
+            .into_iter()
+            .map(
+                |((script, tx_hash, block_number), balance_change)| AccountTransaction {
+                    address: script_to_address(&script, &self.consensus.id),
+                    tx_hash: tx_hash.unpack(),
+                    balance_change,
+                    block_number: block_number.into(),
+                },
+            )
+            .collect();
 
         Ok(result)
     }

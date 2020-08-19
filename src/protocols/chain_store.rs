@@ -716,7 +716,14 @@ impl<S: Store> ChainStore<S> {
                                 .try_into()
                                 .expect("stored ConsumedOutPoint value: consumed_by_block_number"),
                         );
-                        Some((out_point, output, output_data, created_by_block_number, consumed_by_tx_hash, consumed_by_block_number))
+                        Some((
+                            out_point,
+                            output,
+                            output_data,
+                            created_by_block_number,
+                            consumed_by_tx_hash,
+                            consumed_by_block_number,
+                        ))
                     } else {
                         None
                     }

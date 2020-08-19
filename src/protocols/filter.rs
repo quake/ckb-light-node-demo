@@ -47,8 +47,6 @@ impl<S> FilterProtocol<S> {
 pub enum ControlMessage {
     AddFilter(packed::Script),
     SendTransaction(packed::Transaction),
-    Start,
-    Stop,
 }
 
 impl<S: Store + Send + Sync> CKBProtocolHandler for FilterProtocol<S> {
@@ -62,24 +60,53 @@ impl<S: Store + Send + Sync> CKBProtocolHandler for FilterProtocol<S> {
     fn notify(&mut self, nc: Arc<dyn CKBProtocolContext + Sync>, token: u64) {
         match token {
             SEND_GET_FILTERED_BLOCKS_TOKEN => {
-                if let Some((peer, Some(_filter_hash_seed))) = self.peer_filter_hash_seed {
-                    if self.pending_get_filtered_blocks.is_empty() {
-                        let block_hashes = self
-                            .store
-                            .get_unfiltered_block_hashes(MAX_GET_FILTERED_BLOCKS_LEN)
-                            .expect("store should be OK");
-                        if !block_hashes.is_empty() {
+                if let Some((peer, filter_hash_seed)) = self.peer_filter_hash_seed {
+                    if let None = filter_hash_seed {
+                        let scripts = self.store.get_scripts().expect("store should be OK");
+                        if !scripts.is_empty() {
+                            let seed = rand::random();
+                            let mut filter = new_filter(seed);
+                            for (script, _block_number) in scripts {
+                                filter.insert(&script.calc_script_hash());
+                            }
                             let message = packed::FilterMessage::new_builder()
                                 .set(
-                                    packed::GetFilteredBlocks::new_builder()
-                                        .block_hashes(block_hashes.clone().pack())
+                                    packed::SetFilter::new_builder()
+                                        .hash_seed(seed.pack())
+                                        .filter(filter.buckets().raw_data().pack())
+                                        .num_hashes(FILTER_NUM_HASHES.into())
                                         .build(),
                                 )
                                 .build();
+
                             if let Err(err) = nc.send_message_to(peer, message.as_bytes()) {
-                                debug!("FilterProtocol send GetFilteredBlocks error: {:?}", err);
+                                debug!("FilterProtocol send SetFilter error: {:?}", err);
                             }
-                            self.pending_get_filtered_blocks = block_hashes.into_iter().collect();
+                            self.peer_filter_hash_seed = Some((peer, Some(seed)));
+                        }
+                    } else {
+                        if self.pending_get_filtered_blocks.is_empty() {
+                            let block_hashes = self
+                                .store
+                                .get_unfiltered_block_hashes(MAX_GET_FILTERED_BLOCKS_LEN)
+                                .expect("store should be OK");
+                            if !block_hashes.is_empty() {
+                                let message = packed::FilterMessage::new_builder()
+                                    .set(
+                                        packed::GetFilteredBlocks::new_builder()
+                                            .block_hashes(block_hashes.clone().pack())
+                                            .build(),
+                                    )
+                                    .build();
+                                if let Err(err) = nc.send_message_to(peer, message.as_bytes()) {
+                                    debug!(
+                                        "FilterProtocol send GetFilteredBlocks error: {:?}",
+                                        err
+                                    );
+                                }
+                                self.pending_get_filtered_blocks =
+                                    block_hashes.into_iter().collect();
+                            }
                         }
                     }
                 }
@@ -121,43 +148,6 @@ impl<S: Store + Send + Sync> CKBProtocolHandler for FilterProtocol<S> {
                                 if let Err(err) = nc.send_message_to(peer, message.as_bytes()) {
                                     debug!("FilterProtocol send SendTransaction error: {:?}", err);
                                 }
-                            }
-                        }
-                        ControlMessage::Start => {
-                            if let Some((peer, None)) = self.peer_filter_hash_seed {
-                                let scripts = self.store.get_scripts().expect("store should be OK");
-                                if !scripts.is_empty() {
-                                    let seed = rand::random();
-                                    let mut filter = new_filter(seed);
-                                    for (script, _block_number) in scripts {
-                                        filter.insert(&script.calc_script_hash());
-                                    }
-                                    let message = packed::FilterMessage::new_builder()
-                                        .set(
-                                            packed::SetFilter::new_builder()
-                                                .hash_seed(seed.pack())
-                                                .filter(filter.buckets().raw_data().pack())
-                                                .num_hashes(FILTER_NUM_HASHES.into())
-                                                .build(),
-                                        )
-                                        .build();
-
-                                    if let Err(err) = nc.send_message_to(peer, message.as_bytes()) {
-                                        debug!("FilterProtocol send SetFilter error: {:?}", err);
-                                    }
-                                    self.peer_filter_hash_seed = Some((peer, Some(seed)));
-                                }
-                            }
-                        }
-                        ControlMessage::Stop => {
-                            if let Some((peer, _)) = self.peer_filter_hash_seed {
-                                let message = packed::FilterMessage::new_builder()
-                                    .set(packed::ClearFilter::new_builder().build())
-                                    .build();
-                                if let Err(err) = nc.send_message_to(peer, message.as_bytes()) {
-                                    debug!("FilterProtocol send ClearFilter error: {:?}", err);
-                                }
-                                self.peer_filter_hash_seed = Some((peer, None));
                             }
                         }
                     }
@@ -237,6 +227,7 @@ impl<S: Store + Send + Sync> CKBProtocolHandler for FilterProtocol<S> {
 
     fn disconnected(&mut self, _nc: Arc<dyn CKBProtocolContext + Sync>, _peer: PeerIndex) {
         self.peer_filter_hash_seed = None;
+        self.pending_get_filtered_blocks.clear();
     }
 }
 
