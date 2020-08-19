@@ -37,8 +37,13 @@ pub enum IOType {
 pub enum Value {
     ActiveChain(packed::Byte32),
     Header(packed::Header, U256),
-    OutPoint(packed::CellOutput, packed::Bytes),
-    ConsumedOutPoint(packed::CellOutput, packed::Bytes),
+    OutPoint(packed::CellOutput, packed::Bytes, BlockNumber),
+    ConsumedOutPoint(
+        packed::CellOutput,
+        packed::Bytes,
+        packed::Byte32,
+        BlockNumber,
+    ),
     FilteredBlock(Vec<(packed::Byte32, IOIndex, IOType)>),
     Script(BlockNumber),
 }
@@ -95,9 +100,16 @@ impl Into<Vec<u8>> for Value {
                 encoded.extend_from_slice(header.as_slice());
                 encoded.extend_from_slice(total_difficulty.pack().as_slice());
             }
-            Value::OutPoint(output, output_data) | Value::ConsumedOutPoint(output, output_data) => {
+            Value::OutPoint(output, output_data, block_number) => {
                 encoded.extend_from_slice(output.as_slice());
                 encoded.extend_from_slice(output_data.as_slice());
+                encoded.extend_from_slice(&block_number.to_be_bytes());
+            }
+            Value::ConsumedOutPoint(output, output_data, tx_hash, block_number) => {
+                encoded.extend_from_slice(output.as_slice());
+                encoded.extend_from_slice(output_data.as_slice());
+                encoded.extend_from_slice(tx_hash.as_slice());
+                encoded.extend_from_slice(&block_number.to_be_bytes());
             }
             Value::FilteredBlock(ios) => {
                 for (tx_hash, io_index, io_type) in ios {
@@ -292,7 +304,12 @@ impl<S: Store> ChainStore<S> {
                             matched.push((tx_hash.clone(), index as u32, IOType::Input));
                             batch.put_kv(
                                 Key::ConsumedOutPoint(packed::OutPoint::new(tx_hash, index as u32)),
-                                Value::ConsumedOutPoint(output, output_data),
+                                Value::ConsumedOutPoint(
+                                    output,
+                                    output_data,
+                                    tx.calc_tx_hash(),
+                                    filtered_block.header().raw().number().unpack(),
+                                ),
                             )?;
                             batch.delete(Key::OutPoint(input.previous_output()).into_vec())?;
                         }
@@ -307,6 +324,7 @@ impl<S: Store> ChainStore<S> {
                             Value::OutPoint(
                                 output,
                                 tx.raw().outputs_data().get(index).expect("checked len"),
+                                filtered_block.header().raw().number().unpack(),
                             ),
                         )?;
                     }
@@ -363,7 +381,12 @@ impl<S: Store> ChainStore<S> {
                                         tx_hash,
                                         index as u32,
                                     )),
-                                    Value::ConsumedOutPoint(output, output_data),
+                                    Value::ConsumedOutPoint(
+                                        output,
+                                        output_data,
+                                        tx.calc_tx_hash(),
+                                        header.number(),
+                                    ),
                                 )?;
                                 batch.delete(Key::OutPoint(input.previous_output()).into_vec())?;
                             }
@@ -378,6 +401,7 @@ impl<S: Store> ChainStore<S> {
                                 Value::OutPoint(
                                     output,
                                     tx.raw().outputs_data().get(index).expect("checked len"),
+                                    header.number(),
                                 ),
                             )?;
                         }
@@ -415,7 +439,7 @@ impl<S: Store> ChainStore<S> {
                     ) as usize;
                     let output = packed::CellOutput::from_slice(&raw[..output_size])
                         .expect("stored OutPoint value: output");
-                    let output_data = packed::Bytes::from_slice(&raw[output_size..])
+                    let output_data = packed::Bytes::from_slice(&raw[output_size..raw.len() - 8])
                         .expect("stored OutPoint value: output_data");
                     (output, output_data)
                 })
@@ -437,7 +461,7 @@ impl<S: Store> ChainStore<S> {
                     ) as usize;
                     let output = packed::CellOutput::from_slice(&raw[..output_size])
                         .expect("stored ConsumedOutPoint output");
-                    let output_data = packed::Bytes::from_slice(&raw[output_size..])
+                    let output_data = packed::Bytes::from_slice(&raw[output_size..raw.len() - 36])
                         .expect("stored ConsumedOutPoint output_data");
                     (output, output_data)
                 })
@@ -534,7 +558,7 @@ impl<S: Store> ChainStore<S> {
                             batch.delete(Key::ConsumedOutPoint(out_point.clone()).into_vec())?;
                             batch.put_kv(
                                 Key::OutPoint(out_point),
-                                Value::OutPoint(output, output_data),
+                                Value::OutPoint(output, output_data, block_number),
                             )?;
                         }
                     }
@@ -581,7 +605,15 @@ impl<S: Store> ChainStore<S> {
     pub fn get_cells(
         &self,
         script: &packed::Script,
-    ) -> Result<Vec<(packed::CellOutput, packed::Bytes, packed::OutPoint)>, Error> {
+    ) -> Result<
+        Vec<(
+            packed::CellOutput,
+            packed::Bytes,
+            packed::OutPoint,
+            BlockNumber,
+        )>,
+        Error,
+    > {
         self.store
             .iter(&[KeyPrefix::OutPoint as u8], IteratorDirection::Forward)
             .map(|iter| {
@@ -597,14 +629,73 @@ impl<S: Store> ChainStore<S> {
                         if script.eq(&output.lock()) {
                             let out_point = packed::OutPoint::from_slice(&key[1..])
                                 .expect("stored OutPoint key");
-                            let output_data = packed::Bytes::from_slice(&value[output_size..])
-                                .expect("stored OutPoint value: output_data");
-                            Some((output, output_data, out_point))
+                            let output_data =
+                                packed::Bytes::from_slice(&value[output_size..value.len() - 8])
+                                    .expect("stored OutPoint value: output_data");
+                            let block_number = BlockNumber::from_be_bytes(
+                                value[value.len() - 8..]
+                                    .try_into()
+                                    .expect("stored OutPoint value: block_number"),
+                            );
+                            Some((output, output_data, out_point, block_number))
                         } else {
                             None
                         }
                     })
                     .collect::<Vec<_>>()
+            })
+    }
+
+    pub fn get_consumed_cells(
+        &self,
+        script: &packed::Script,
+    ) -> Result<
+        Vec<(
+            packed::CellOutput,
+            packed::Bytes,
+            packed::OutPoint,
+            packed::Byte32,
+            BlockNumber,
+        )>,
+        Error,
+    > {
+        self.store
+            .iter(
+                &[KeyPrefix::ConsumedOutPoint as u8],
+                IteratorDirection::Forward,
+            )
+            .map(|iter| {
+                iter.take_while(|(key, _value)| {
+                    key.starts_with(&[KeyPrefix::ConsumedOutPoint as u8])
+                })
+                .filter_map(|(key, value)| {
+                    let output_size = u32::from_le_bytes(
+                        value[..4]
+                            .try_into()
+                            .expect("stored ConsumedOutPoint value: output_size"),
+                    ) as usize;
+                    let output = packed::CellOutput::from_slice(&value[..output_size])
+                        .expect("stored ConsumedOutPoint value: output");
+                    if script.eq(&output.lock()) {
+                        let out_point = packed::OutPoint::from_slice(&key[1..])
+                            .expect("stored ConsumedOutPoint key");
+                        let output_data =
+                            packed::Bytes::from_slice(&value[output_size..value.len() - 40])
+                                .expect("stored ConsumedOutPoint value: output_data");
+                        let tx_hash =
+                            packed::Byte32::from_slice(&value[value.len() - 40..value.len() - 8])
+                                .expect("stored ConsumedOutPoint value: tx_hash");
+                        let block_number = BlockNumber::from_be_bytes(
+                            value[value.len() - 8..]
+                                .try_into()
+                                .expect("stored ConsumedOutPoint value: block_number"),
+                        );
+                        Some((output, output_data, out_point, tx_hash, block_number))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
             })
     }
 }
