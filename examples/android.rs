@@ -11,8 +11,11 @@ use ckb_network::{
 use clap::{App, Arg};
 use crossbeam_channel::unbounded;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::ffi::OsStr;
+use std::os::unix::ffi::OsStrExt;
+
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Config {
@@ -20,19 +23,13 @@ struct Config {
     pub network: NetworkConfig,
 }
 
+#[cfg_attr(target_os = "android", ndk_glue::main(backtrace = "on"))]
 fn main() {
     let matches = App::new("ckb light node demo")
         .arg(
             Arg::with_name("listen_uri")
                 .short("l")
                 .help("Light node rpc http service listen address, default 127.0.0.1:8121")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("dir")
-                .short("d")
-                .help("Sets the working dir to use")
-                .required(true)
                 .takes_value(true),
         )
         .arg(
@@ -43,15 +40,13 @@ fn main() {
         )
         .get_matches();
 
-    let mut path = PathBuf::new();
-
-    path.push(matches.value_of("dir").expect("required arg"));
-    path.push("config.toml");
     let mut config: Config =
-        toml::from_slice(&std::fs::read(path.clone()).expect("load config file"))
+        toml::from_slice(include_bytes!("../config.toml"))
             .expect("deserialize config file");
 
-    path.pop();
+    let osstr = OsStr::from_bytes(ndk_glue::native_activity().external_data_path().to_bytes());
+    let base_path: &Path = osstr.as_ref();
+    let mut path: PathBuf = base_path.clone().into();
     path.push("run.log");
     config.logger.file = path.clone();
     let _logger_guard = ckb_logger_service::init(config.logger).unwrap();
@@ -65,8 +60,9 @@ fn main() {
 
     let rpc_listen_address = matches.value_of("listen_uri").unwrap_or("127.0.0.1:8121");
 
-    let chain = matches.value_of("chain").unwrap_or("mainnet");
+    let chain = matches.value_of("chain").unwrap_or("testnet");
 
+    println!("init demo, chain: {}", chain);
     init(
         config.network,
         rpc_listen_address,

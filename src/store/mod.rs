@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
-mod rocksdb;
-pub use self::rocksdb::RocksdbStore;
+// mod rocksdb;
+// pub use self::rocksdb::RocksdbStore;
+mod sled;
+pub use self::sled::SledStore;
 
 #[derive(Debug)]
 pub enum Error {
@@ -16,7 +18,7 @@ impl ToString for Error {
     }
 }
 
-pub type IteratorItem = (Box<[u8]>, Box<[u8]>);
+pub type IteratorItem = (Vec<u8>, Vec<u8>);
 
 pub enum IteratorDirection {
     Forward,
