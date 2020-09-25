@@ -100,7 +100,7 @@ impl<S: Store + Send + Sync> CKBProtocolHandler for SyncProtocol<S> {
                                 .insert_header(header)
                                 .expect("store should be OK"),
                             Err(err) => {
-                                warn!("Peer {} sends us an invalid header: {:?}", peer, err);
+                                warn!("Peer {} sends us an invalid header: {}", peer, err);
                                 nc.ban_peer(
                                     peer,
                                     BAD_MESSAGE_BAN_TIME,
