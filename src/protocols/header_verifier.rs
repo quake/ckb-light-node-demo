@@ -24,7 +24,6 @@ impl<'a, T: HeaderProvider> HeaderVerifier<'a, T> {
         self.verify_version(header)
             .and(self.verify_pow(header))
             .and(self.verify_number(header))
-            .and(self.verify_timestamp(header))
     }
 
     fn verify_version(&self, header: &HeaderView) -> Result<(), HeaderVerificationError> {
@@ -53,30 +52,6 @@ impl<'a, T: HeaderProvider> HeaderVerifier<'a, T> {
                 }
             }
             None => Err(HeaderVerificationError::UnknownParent),
-        }
-    }
-
-    fn verify_timestamp(&self, header: &HeaderView) -> Result<(), HeaderVerificationError> {
-        let median_time_block_count = self.consensus.median_time_block_count();
-        let mut timestamps = Vec::with_capacity(median_time_block_count);
-        let mut parent_hash = header.parent_hash();
-        for _ in 0..median_time_block_count {
-            match self.header_provider.get_header(parent_hash) {
-                Some(parent) => {
-                    timestamps.push(parent.timestamp());
-                    parent_hash = parent.parent_hash();
-                }
-                None => {
-                    break;
-                }
-            }
-        }
-        timestamps.sort();
-        let median_time = timestamps[timestamps.len() >> 1];
-        if header.timestamp() > median_time {
-            Ok(())
-        } else {
-            Err(HeaderVerificationError::Timestamp)
         }
     }
 }
